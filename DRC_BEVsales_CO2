@@ -1,0 +1,80 @@
+### load in data
+
+
+library(tidyverse)
+library(data.table)
+library(tidyr)
+library(readr)
+library(readxl)
+library(dplyr)
+library(lubridate)
+library(scales)
+
+emissions_Data_DRC <- read.csv("/Users/jacklouchheim/Desktop/G2 Question/copper-mining_country_emissions.csv")
+BEV_Data <- read.csv("/Users/jacklouchheim/Desktop/G2 Question/IEA-EV-dataEV salesHistoricalCars.csv")
+
+###create clean dataset for DRC copper mining emissions 
+DRC_copper_CO2 <- emissions_Data_DRC %>%
+  filter(gas == "co2")
+
+##create clean dataset for world EV sales
+world_emissions <- subset(BEV_Data, grepl("World", region))
+world_BEV_emissions <- subset(world_emissions, grepl("EV sales", parameter))
+world_BEV_sales  <- subset(world_BEV_emissions, grepl("BEV", powertrain))
+
+##Remove useless data
+rm(BEV_Data, world_BEV_emissions, world_emissions)
+rm(emissions_Data)
+
+##modify year in DRC Copper data
+DRC_copper_CO2$start_time <- substr(DRC_copper_CO2$start_time, 1, 4)
+DRC_copper_CO2$year <- DRC_copper_CO2$start_time
+DRC_copper_CO2 <- subset(DRC_copper_CO2, select = -start_time)
+DRC_copper_CO2 <- DRC_copper_CO2 %>%
+  select(year, emissions_quantity, everything())
+DRC_copper_CO2 <- DRC_copper_CO2 %>%
+  arrange(year) %>%
+  filter(year > 2010)
+
+
+##rearrange data in BEV data
+world_BEV_sales <- world_BEV_sales %>%
+  select(year, value, everything()) %>%
+  filter(year > 2014)
+
+##change column name for EV Sales
+merged_dataset$BEV_Sales <- merged_dataset$value
+
+
+#rearrange data in merged dataset
+merged_dataset <- merged_dataset %>%
+  select(year, iso3_country, gas, emissions_quantity_units, emissions_quantity, BEV_Sales, everything())
+
+#create variable names
+Co2_emissions <- DRC_copper_CO2$emissions_quantity
+BEV_sales <- world_BEV_sales$value
+
+
+##merge into one dataset
+merged_dataset <- merge(DRC_copper_CO2, world_BEV_sales, by = "year", all = TRUE)
+
+### Do Scatterplot
+ggplot(data = merged_dataset, aes(x = value, y = emissions_quantity, label = year)) +
+  geom_point(color = "blue") +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +  # Add linear regression line
+  geom_text(size = 3, vjust = -0.5, color = "black") +  # Add labels for each point
+  labs(x = "Global BEV Sales (units)", y = "DRC CO2 Emissions From Copper Mining (tons)", 
+       title = "") +
+  scale_x_continuous(labels = comma) +
+  scale_y_continuous(limits = c(150000, 500000), labels = comma) +
+  theme(plot.title = element_text(face = "bold", size = 3),  axis.title.x = element_text(face = "bold", size = 15),
+        axis.title.y = element_text(face = "bold", size = 13))
+  
+
+
+##create linear regression model
+lm_model <- lm(emissions_quantity ~ value, data = merged_dataset)
+summary(lm_model)
+
+
+merged_dataset$year <- as.numeric(as.character(merged_dataset$year))
